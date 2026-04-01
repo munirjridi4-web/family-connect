@@ -722,6 +722,27 @@
     font-style: italic;
   }
 
+  .date-split {
+    display: flex;
+    gap: 6px;
+  }
+
+  .date-split select {
+    flex: 1;
+    padding: 9px 8px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    background: white;
+    color: var(--text);
+    transition: border-color 0.2s;
+    appearance: auto;
+  }
+
+  .date-split select:focus { outline: none; border-color: var(--primary-light); }
+  .date-split select.year { flex: 1.3; }
+
   .dob-error {
     color: var(--danger);
     font-size: 12px;
@@ -1691,7 +1712,12 @@
         <div class="form-row">
           <div class="form-group">
             <label>Date of Birth</label>
-            <input type="date" id="regDob" onchange="validateDobField(this)">
+            <input type="hidden" id="regDob">
+            <div class="date-split" data-target="regDob">
+              <select onchange="syncDateSplit(this)" data-part="day"><option value="">Day</option></select>
+              <select onchange="syncDateSplit(this)" data-part="month"><option value="">Month</option></select>
+              <select class="year" onchange="syncDateSplit(this)" data-part="year"><option value="">Year</option></select>
+            </div>
             <div class="dob-error" id="regDobError"></div>
           </div>
           <div class="form-group">
@@ -2095,7 +2121,12 @@
         </div>
         <div class="form-group">
           <label>Date of Birth</label>
-          <input type="date" id="personDob" onchange="validateDobField(this)">
+          <input type="hidden" id="personDob">
+          <div class="date-split" data-target="personDob">
+            <select onchange="syncDateSplit(this)" data-part="day"><option value="">Day</option></select>
+            <select onchange="syncDateSplit(this)" data-part="month"><option value="">Month</option></select>
+            <select class="year" onchange="syncDateSplit(this)" data-part="year"><option value="">Year</option></select>
+          </div>
           <div class="dob-error" id="personDobError"></div>
         </div>
       </div>
@@ -2111,7 +2142,12 @@
       </div>
       <div class="form-group" id="deathDateGroup" style="display:none">
         <label>Date of Death</label>
-        <input type="date" id="personDeathDate">
+        <input type="hidden" id="personDeathDate">
+        <div class="date-split" data-target="personDeathDate">
+          <select onchange="syncDateSplit(this)" data-part="day"><option value="">Day</option></select>
+          <select onchange="syncDateSplit(this)" data-part="month"><option value="">Month</option></select>
+          <select class="year" onchange="syncDateSplit(this)" data-part="year"><option value="">Year</option></select>
+        </div>
       </div>
       <div class="form-group">
         <label class="checkbox-row">
@@ -2380,6 +2416,84 @@ function generateFamilyId() {
   return `${surname}-${countryCode}-${rand}`;
 }
 
+// ===== DATE SPLIT DROPDOWNS =====
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function initDateSplits() {
+  document.querySelectorAll('.date-split').forEach(container => {
+    const daySel = container.querySelector('[data-part="day"]');
+    const monthSel = container.querySelector('[data-part="month"]');
+    const yearSel = container.querySelector('[data-part="year"]');
+    if (!daySel || !monthSel || !yearSel) return;
+    if (daySel.options.length > 1) return; // Already populated
+
+    // Days 1-31
+    for (let d = 1; d <= 31; d++) {
+      daySel.add(new Option(d, String(d).padStart(2, '0')));
+    }
+    // Months
+    for (let m = 0; m < 12; m++) {
+      monthSel.add(new Option(MONTH_NAMES[m], String(m + 1).padStart(2, '0')));
+    }
+    // Years: current year down to 1900
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear; y >= 1900; y--) {
+      yearSel.add(new Option(y, y));
+    }
+  });
+}
+
+function syncDateSplit(select) {
+  const container = select.closest('.date-split');
+  if (!container) return;
+  const targetId = container.dataset.target;
+  const hidden = document.getElementById(targetId);
+  if (!hidden) return;
+
+  const day = container.querySelector('[data-part="day"]').value;
+  const month = container.querySelector('[data-part="month"]').value;
+  const year = container.querySelector('[data-part="year"]').value;
+
+  if (year && month && day) {
+    hidden.value = `${year}-${month}-${day}`;
+  } else if (year && month) {
+    hidden.value = `${year}-${month}-01`;
+  } else {
+    hidden.value = '';
+  }
+
+  // Trigger validation if the target has a validateDobField handler
+  if (targetId === 'regDob' || targetId === 'personDob') {
+    validateDobField(hidden);
+  }
+}
+
+function setDateSplitFromValue(targetId, dateStr) {
+  if (!dateStr) return;
+  const parts = dateStr.split('-');
+  if (parts.length < 3) return;
+  const container = document.querySelector(`.date-split[data-target="${targetId}"]`);
+  if (!container) return;
+  container.querySelector('[data-part="year"]').value = parts[0];
+  container.querySelector('[data-part="month"]').value = parts[1];
+  container.querySelector('[data-part="day"]').value = parts[2];
+}
+
+function clearDateSplit(targetId) {
+  const container = document.querySelector(`.date-split[data-target="${targetId}"]`);
+  if (!container) return;
+  container.querySelector('[data-part="day"]').value = '';
+  container.querySelector('[data-part="month"]').value = '';
+  container.querySelector('[data-part="year"]').value = '';
+  const hidden = document.getElementById(targetId);
+  if (hidden) hidden.value = '';
+}
+
+// Initialize all date splits on page load
+document.addEventListener('DOMContentLoaded', initDateSplits);
+// Also init when called dynamically (for modals)
+setTimeout(initDateSplits, 100);
+
 // ===== BIRTH DATE VALIDATION =====
 function validateBirthDate(dateStr) {
   if (!dateStr) return null; // empty is OK (optional)
@@ -2394,18 +2508,20 @@ function validateBirthDate(dateStr) {
 }
 
 function validateDobField(input) {
-  // Find the sibling .dob-error element
-  const errorEl = input.parentElement.querySelector('.dob-error');
+  // Find the error element — look in parent form-group or by sibling ID
+  const formGroup = input.closest('.form-group') || input.parentElement;
+  const errorEl = formGroup.querySelector('.dob-error');
   if (!errorEl) return;
   const err = validateBirthDate(input.value);
+  const splitContainer = formGroup.querySelector('.date-split');
   if (err) {
     errorEl.textContent = err;
     errorEl.style.display = 'block';
-    input.style.borderColor = 'var(--danger)';
+    if (splitContainer) splitContainer.querySelectorAll('select').forEach(s => s.style.borderColor = 'var(--danger)');
   } else {
     errorEl.textContent = '';
     errorEl.style.display = 'none';
-    input.style.borderColor = '';
+    if (splitContainer) splitContainer.querySelectorAll('select').forEach(s => s.style.borderColor = '');
   }
 }
 
@@ -2775,10 +2891,13 @@ function editMember(id) {
   document.getElementById('personName').value = m.name;
   document.getElementById('personRelation').value = m.relationship;
   document.getElementById('personDob').value = m.dateOfBirth || '';
+  initDateSplits();
+  setDateSplitFromValue('personDob', m.dateOfBirth);
   document.getElementById('personInfo').value = m.additionalInfo || '';
   document.getElementById('personPrivate').checked = m.isPrivate || false;
   document.getElementById('personDeceased').checked = m.isDeceased || false;
   document.getElementById('personDeathDate').value = m.deathDate || '';
+  setDateSplitFromValue('personDeathDate', m.deathDate);
   document.getElementById('personDeathDate').closest('.form-group').style.display = m.isDeceased ? 'block' : 'none';
   document.getElementById('modalTitle').textContent = 'Edit Family Member';
   document.getElementById('modalSubmitBtn').textContent = 'Save Changes';
@@ -2790,12 +2909,13 @@ function openAddModal() {
   document.getElementById('editId').value = '';
   document.getElementById('personName').value = '';
   document.getElementById('personRelation').value = '';
-  document.getElementById('personDob').value = '';
+  clearDateSplit('personDob');
   document.getElementById('personInfo').value = '';
   document.getElementById('personPrivate').checked = false;
   document.getElementById('personDeceased').checked = false;
-  document.getElementById('personDeathDate').value = '';
+  clearDateSplit('personDeathDate');
   document.getElementById('personDeathDate').closest('.form-group').style.display = 'none';
+  initDateSplits();
   document.getElementById('modalTitle').textContent = 'Add Family Member';
   document.getElementById('modalSubmitBtn').textContent = 'Add Person';
   document.getElementById('addPersonError').style.display = 'none';
